@@ -65,33 +65,32 @@ async def _scrape_clients(router: AsusRouter) -> None:
 
 async def _scrape_cpu(router: AsusRouter) -> None:
     data = await router.async_get_data(AsusData.CPU)
-    if not data:
+    if not data or "total" not in data:
         return
-    usage = getattr(data, "total", None)
-    if usage is not None:
-        cpu_usage.set(float(usage))
+    stats = data["total"]
+    total = stats.get("total", 0)
+    used  = stats.get("used", 0)
+    if total:
+        cpu_usage.set(used / total * 100)
 
 
 async def _scrape_ram(router: AsusRouter) -> None:
+    # RAM values are in KB
     data = await router.async_get_data(AsusData.RAM)
     if not data:
         return
-    if (usage := getattr(data, "usage", None)) is not None:
+    if (usage := data.get("usage")) is not None:
         ram_usage.set(float(usage))
-    if (total := getattr(data, "total", None)) is not None:
-        ram_total_bytes.set(float(total))
-    if (free := getattr(data, "free", None)) is not None:
-        ram_free_bytes.set(float(free))
+    if (total := data.get("total")) is not None:
+        ram_total_bytes.set(float(total) * 1024)
+    if (free := data.get("free")) is not None:
+        ram_free_bytes.set(float(free) * 1024)
 
 
 async def _scrape_wan(router: AsusRouter) -> None:
-    data = await router.async_get_data(AsusData.WAN)
-    if not data:
-        return
-    if (rx := getattr(data, "rx_speed", None)) is not None:
-        wan_rx_rate_bytes.set(float(rx))
-    if (tx := getattr(data, "tx_speed", None)) is not None:
-        wan_tx_rate_bytes.set(float(tx))
+    # WAN endpoint returns connection status only — no rate data available.
+    # WAN throughput can be derived from Cisco switch SNMP uplink port stats.
+    pass
 
 
 async def scrape(router: AsusRouter) -> None:
@@ -132,10 +131,8 @@ async def main() -> None:
             await router.async_connect()
             try:
                 fw = await router.async_get_data(AsusData.FIRMWARE)
-                router_info.info({
-                    "model":    str(getattr(fw, "model", "unknown")),
-                    "firmware": str(getattr(fw, "current", "unknown")),
-                })
+                if fw and isinstance(fw, dict):
+                    router_info.info({"firmware": str(fw.get("current", "unknown"))})
             except Exception:
                 pass
 
