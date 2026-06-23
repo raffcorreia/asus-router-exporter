@@ -121,31 +121,37 @@ async def main() -> None:
     start_http_server(METRICS_PORT)
 
     while True:
+        router = AsusRouter(
+            hostname=ROUTER_HOST,
+            username=ROUTER_USERNAME,
+            password=ROUTER_PASSWORD,
+            port=ROUTER_PORT,
+            use_ssl=ROUTER_USE_SSL,
+        )
         try:
-            async with AsusRouter(
-                hostname=ROUTER_HOST,
-                username=ROUTER_USERNAME,
-                password=ROUTER_PASSWORD,
-                port=ROUTER_PORT,
-                use_ssl=ROUTER_USE_SSL,
-            ) as router:
-                try:
-                    fw = await router.async_get_data(AsusData.FIRMWARE)
-                    router_info.info({
-                        "model":    str(getattr(fw, "model", "unknown")),
-                        "firmware": str(getattr(fw, "current", "unknown")),
-                    })
-                except Exception:
-                    pass
+            await router.async_connect()
+            try:
+                fw = await router.async_get_data(AsusData.FIRMWARE)
+                router_info.info({
+                    "model":    str(getattr(fw, "model", "unknown")),
+                    "firmware": str(getattr(fw, "current", "unknown")),
+                })
+            except Exception:
+                pass
 
-                log.info("Connected to router at %s", ROUTER_HOST)
-                while True:
-                    await scrape(router)
-                    await asyncio.sleep(SCRAPE_INTERVAL)
+            log.info("Connected to router at %s", ROUTER_HOST)
+            while True:
+                await scrape(router)
+                await asyncio.sleep(SCRAPE_INTERVAL)
 
         except Exception as exc:
             log.error("Connection failed: %s — retrying in 60s", exc)
             scrape_success.set(0)
+        finally:
+            try:
+                await router.async_disconnect()
+            except Exception:
+                pass
             await asyncio.sleep(60)
 
 
