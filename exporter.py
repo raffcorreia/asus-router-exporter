@@ -54,10 +54,13 @@ async def _scrape_clients(router: AsusRouter) -> None:
     total = 0
     for client in data.values():
         total += 1
-        band = getattr(client, "band", None)
-        if band is not None:
-            label = str(band).split(".")[-1].lower().replace("ghz", " GHz")
-            band_counts[label] = band_counts.get(label, 0) + 1
+        conn = getattr(client, "connection", None)
+        if conn is not None:
+            # connection.type is a ConnectionType enum; .value is e.g. "2ghz", "5ghz", "wired"
+            ctype = getattr(conn, "type", None)
+            if ctype is not None:
+                label = str(getattr(ctype, "value", ctype))
+                band_counts[label] = band_counts.get(label, 0) + 1
     clients_total.set(total)
     for band, count in band_counts.items():
         clients_by_band.labels(band=band).set(count)
